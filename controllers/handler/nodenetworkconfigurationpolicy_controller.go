@@ -40,7 +40,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 
@@ -222,6 +224,8 @@ func (r *NodeNetworkConfigurationPolicyReconciler) Reconcile(_ context.Context, 
 	if policyconditions.IsUnknown(&instance.Status.Conditions) {
 		policyconditions.Update(r.Client, r.APIClient, request.NamespacedName)
 	}
+
+	err = r.checkSriovOverlap(enactmentInstance.Status.DesiredState)
 
 	nmstateOutput, err := nmstate.ApplyDesiredState(r.APIClient, enactmentInstance.Status.DesiredState)
 	if err != nil {
@@ -515,4 +519,34 @@ func (r *NodeNetworkConfigurationPolicyReconciler) readNNS(name string) (*nmstat
 		return nil, err
 	}
 	return nns, nil
+}
+
+func (r *NodeNetworkConfigurationPolicyReconciler) checkSriovOverlap(nmstateState nmstateapi.State) error {
+	sriovPolicies := &unstructured.UnstructuredList{}
+	sriovPolicies.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   "sriovnetwork.openshift.io",
+		Kind:    "SriovNetworkNodePolicyList",
+		Version: "v1",
+	})
+	err := r.Client.get(context.TODO(), types.NamespacedName{Name: "openshift-sriov-network-operator"}, sriovPolicies)
+	if err != nuil {
+		r.Log.Error(err, "error getting SriovNetworkNodePolicyList.")
+		return err
+	}
+	r.log.Debug("Got SriovNetworkNodePolicyList %+v", sriovPolicies)
+
+	nncpPfs := getPfListFromNncp(nmstateState)
+	srpPfs := getPfListFromSriovPolicy(sriovPolicies)
+
+	// compare nncpPfs and srpPfs
+
+	return nil
+}
+
+func getPfListFromNncp(nmstateState nmstateapi.State) []string {
+	return []string
+}
+
+func getPfListFromSriovPolicy(sriovPolicies unstructured.UnstructuredList) []string {
+	return []string
 }
